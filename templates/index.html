@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMDb Top 250 &mdash; Analytics &amp; Scraping Dashboard</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- ── App Header / Navbar ──────────────────────────────────────── -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="brand-group">
+                <div class="brand-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="15" x="2" y="7" rx="2" ry="2"/>
+                        <polyline points="17 2 12 7 7 2"/>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <div class="brand-title">
+                        <span>IMDb</span> Top 250 Monitor
+                        <span class="version-pill">v2.0 PRO</span>
+                    </div>
+                    <div class="brand-sub">Automated Headless Selenium Scraper &amp; Analytics</div>
+                </div>
+            </div>
+
+            <!-- Header Status & Action Bar -->
+            <div class="header-actions">
+                <div class="status-indicator-group">
+                    <div class="status-badge" title="Daily background update">
+                        <span class="status-dot pulse-green"></span>
+                        <span>Auto-Update: <strong>{{ schedule_hour }}:{{ '%02d' % schedule_minute }} AM</strong></span>
+                    </div>
+                    {% if last_updated %}
+                    <div class="status-badge">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span>Updated: <strong>{{ last_updated }}</strong></span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="btn-group">
+                    <button id="scrapeBtn" class="btn btn-primary" onclick="triggerScrape()">
+                        <svg class="icon btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        </svg>
+                        <span>Scrape Now</span>
+                    </button>
+
+                    <a href="/download/csv" class="btn btn-secondary {% if total == 0 %}disabled{% endif %}"
+                       id="downloadBtn" {% if total == 0 %}onclick="return false;"{% endif %}>
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                        </svg>
+                        <span>Export CSV</span>
+                    </a>
+
+                    <button class="btn btn-ghost" onclick="toggleTechSpecModal()" title="View Architecture & Pipeline Specs">
+                        <svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/>
+                        </svg>
+                        <span>Pipeline Specs</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Main Dashboard Layout ────────────────────────────────────── -->
+    <main class="dashboard-wrapper">
+
+        <!-- ── Toast Notifications ───────────────────────────────────── -->
+        <div id="toastContainer" class="toast-container"></div>
+
+        <!-- ── Stats Overview Grid ───────────────────────────────────── -->
+        <section class="stats-overview">
+            <div class="stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-title">Catalog Indexed</span>
+                    <div class="stat-icon-wrapper gold">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-card-body">
+                    <span class="stat-number">{{ total }}</span>
+                    <span class="stat-badge">Top 250 Scope</span>
+                </div>
+                <div class="stat-card-footer">
+                    <span class="stat-subtext">Headless JavaScript Extraction</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-title">Mean Rating</span>
+                    <div class="stat-icon-wrapper star-gold">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-card-body">
+                    <span class="stat-number">{{ avg_rating }}<small>/10</small></span>
+                    <span class="stat-badge success">High Consensus</span>
+                </div>
+                <div class="stat-card-footer">
+                    <span class="stat-subtext">Weighted IMDb User Scores</span>
+                </div>
+            </div>
+
+            <div class="stat-card highlight">
+                <div class="stat-card-header">
+                    <span class="stat-title">#1 Ranked Masterpiece</span>
+                    <div class="stat-icon-wrapper trophy">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.45 1-1 1H8v4h8v-4h-1c-.55 0-1-.45-1-1v-2.34M18 4H6v7a6 6 0 0 0 12 0V4Z"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-card-body">
+                    <span class="stat-number gold-text">{{ highest.get('Rating', '9.3') }}</span>
+                    <span class="stat-badge gold-bg">Rank #1</span>
+                </div>
+                <div class="stat-card-footer">
+                    <span class="stat-subtext truncate" title="{{ highest.get('Title', 'The Shawshank Redemption') }}">{{ highest.get('Title', 'The Shawshank Redemption') }} ({{ highest.get('Year', '1994') }})</span>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-card-header">
+                    <span class="stat-title">Catalog Threshold</span>
+                    <div class="stat-icon-wrapper blue">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/>
+                        </svg>
+                    </div>
+                </div>
+                <div class="stat-card-body">
+                    <span class="stat-number">{{ lowest.get('Rating', '8.0') }}<small>/10</small></span>
+                    <span class="stat-badge blue-bg">Rank #250</span>
+                </div>
+                <div class="stat-card-footer">
+                    <span class="stat-subtext truncate" title="{{ lowest.get('Title', 'Threshold Entry') }}">{{ lowest.get('Title', 'Threshold Entry') }}</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Interactive Analytics & Decade Breakdown ─────────────── -->
+        {% if decade_counts %}
+        <section class="analytics-card">
+            <div class="analytics-header">
+                <div class="analytics-title-group">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/>
+                    </svg>
+                    <h3>Cinema Era Distribution</h3>
+                </div>
+                <span class="analytics-tip">Click any decade pill to instantly filter the dataset</span>
+            </div>
+            <div class="decade-distribution-grid">
+                {% for decade, count in decade_counts.items() | sort %}
+                <div class="decade-pill-item" onclick="filterByDecade('{{ decade }}')" id="decade-pill-{{ decade }}">
+                    <div class="decade-pill-meta">
+                        <span class="decade-name">{{ decade }}s</span>
+                        <span class="decade-val">{{ count }} <small>films</small></span>
+                    </div>
+                    <div class="decade-progress-bar">
+                        <div class="decade-progress-fill" style="width: {{ (count / total * 100) | round(1) }}%;"></div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endif %}
+
+        <!-- ── Controls, Filters & Search Toolbar ────────────────────── -->
+        <section class="table-controls-card">
+            <div class="toolbar-primary">
+                <!-- Search -->
+                <div class="search-input-wrapper">
+                    <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                    <input type="text" id="searchInput" placeholder="Search movies by title (press '/' to focus)..." autocomplete="off">
+                    <button id="clearSearchBtn" class="clear-search-btn hidden" onclick="clearSearch()" title="Clear search">&times;</button>
+                </div>
+
+                <!-- Sort Selector -->
+                <div class="sort-selector-wrapper">
+                    <span class="control-label">Sort:</span>
+                    <select id="sortSelect" onchange="applySorting()">
+                        <option value="rank-asc">Rank: 1 &rarr; 250</option>
+                        <option value="rank-desc">Rank: 250 &rarr; 1</option>
+                        <option value="rating-desc">Rating: Highest &rarr; Lowest</option>
+                        <option value="rating-asc">Rating: Lowest &rarr; Highest</option>
+                        <option value="year-desc">Year: Newest &rarr; Oldest</option>
+                        <option value="year-asc">Year: Oldest &rarr; Newest</option>
+                        <option value="title-asc">Title: A &rarr; Z</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Quick Filter Chips -->
+            <div class="toolbar-chips">
+                <span class="chips-label">Quick Filters:</span>
+                <div class="chip-group">
+                    <button class="filter-chip active" onclick="setQuickFilter('all', this)">All ({{ total }})</button>
+                    <button class="filter-chip" onclick="setQuickFilter('top10', this)">Top 10</button>
+                    <button class="filter-chip" onclick="setQuickFilter('top50', this)">Top 50</button>
+                    <button class="filter-chip" onclick="setQuickFilter('high-rating', this)">Rating &ge; 8.8</button>
+                    <button class="filter-chip" onclick="setQuickFilter('classic', this)">Classics (&le; 1980)</button>
+                    <button class="filter-chip" onclick="setQuickFilter('modern', this)">Modern (&ge; 2010)</button>
+                </div>
+                <div class="results-meta">
+                    Showing <strong id="visibleCount">{{ total }}</strong> of {{ total }} records
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Main Data Table Card ──────────────────────────────────── -->
+        <section class="table-container-card">
+            <div class="table-scroll-wrapper">
+                <table id="movieTable">
+                    <thead>
+                        <tr>
+                            <th class="th-expand" width="48"></th>
+                            <th class="th-rank" width="85">Rank</th>
+                            <th class="th-title">Movie Title</th>
+                            <th class="th-year" width="110">Release Year</th>
+                            <th class="th-rating" width="220">IMDb Rating</th>
+                            <th class="th-action" width="130">Deep Scraping</th>
+                        </tr>
+                    </thead>
+                    <tbody id="movieTableBody">
+                        {% for movie in movies %}
+                        <tr class="movie-row" id="row-{{ movie.Rank }}" 
+                            data-rank="{{ movie.Rank }}"
+                            data-title="{{ movie.Title }}" 
+                            data-year="{{ movie.Year }}" 
+                            data-rating="{{ movie.Rating }}"
+                            data-url="{{ movie.IMDb_URL }}"
+                            onclick="handleRowClick(event, '{{ movie.Rank }}', '{{ movie.IMDb_URL }}')">
+                            
+                            <td class="td-expand">
+                                <button class="expand-btn-caret" id="caret-{{ movie.Rank }}" title="Expand for cast, genre, director & plot">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                                        <polyline points="9 18 15 12 9 6"/>
+                                    </svg>
+                                </button>
+                            </td>
+
+                            <td class="td-rank">
+                                <span class="rank-badge {% if movie.Rank <= 10 %}rank-top10{% elif movie.Rank <= 50 %}rank-top50{% endif %}">
+                                    #{{ movie.Rank }}
+                                </span>
+                            </td>
+
+                            <td class="td-title">
+                                <div class="title-meta-cell">
+                                    <span class="movie-name">{{ movie.Title }}</span>
+                                    {% if movie.Rank == 1 %}
+                                    <span class="badge-mini gold">All-Time #1</span>
+                                    {% endif %}
+                                </div>
+                            </td>
+
+                            <td class="td-year">
+                                <span class="year-pill">{{ movie.Year }}</span>
+                            </td>
+
+                            <td class="td-rating">
+                                <div class="rating-cell-group">
+                                    <div class="rating-badge">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                        </svg>
+                                        <span>{{ movie.Rating }}</span>
+                                    </div>
+                                    <div class="rating-track">
+                                        <div class="rating-fill" style="width: {{ ((movie.Rating | float) / 10 * 100) | round(1) }}%;"></div>
+                                    </div>
+                                </div>
+                            </td>
+
+                            <td class="td-action">
+                                <button class="btn-expand-chip" type="button">
+                                    <span>Details</span>
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Expandable Drawer for Feature 5 -->
+                        <tr class="detail-row hidden" id="detail-{{ movie.Rank }}">
+                            <td colspan="6" class="detail-td">
+                                <div class="detail-drawer" id="detail-content-{{ movie.Rank }}">
+                                    <div class="detail-loading-state">
+                                        <div class="spinner-small"></div>
+                                        <span>Executing headless Selenium worker to extract individual page metadata...</span>
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+
+                        {% if not movies %}
+                        <tr>
+                            <td colspan="6" class="empty-state-cell">
+                                <div class="empty-state-wrapper">
+                                    <div class="empty-state-icon">
+                                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                            <rect width="20" height="15" x="2" y="7" rx="2" ry="2"/>
+                                            <polyline points="17 2 12 7 7 2"/>
+                                        </svg>
+                                    </div>
+                                    <h4>No IMDb Data Found in Database</h4>
+                                    <p>The local dataset has not been scraped yet. Click <strong>"Scrape Now"</strong> to run the automated headless browser.</p>
+                                    <button class="btn btn-primary" onclick="triggerScrape()">Run Initial Scrape</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+
+                <!-- No Search Results Found -->
+                <div id="noResultsBlock" class="no-results-state hidden">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
+                    </svg>
+                    <h4>No matching movies found</h4>
+                    <p>Try adjusting your search query or clear the active filters.</p>
+                    <button class="btn btn-ghost" onclick="clearSearch()">Clear Filters</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ── Pipeline & Architecture Modal (Specs) ─────────────────────── -->
+    <div id="techModal" class="modal-backdrop hidden" onclick="handleModalBackdropClick(event)">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-group">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                    </svg>
+                    <h3>Scraper Architecture &amp; System Specifications</h3>
+                </div>
+                <button class="modal-close-btn" onclick="toggleTechSpecModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="spec-grid">
+                    <div class="spec-card">
+                        <div class="spec-header green">
+                            <span class="spec-dot green"></span>
+                            <h4>1. Reliable Extraction (Selenium)</h4>
+                        </div>
+                        <p>Uses Selenium WebDriver with Google Chrome in <code>--headless=new</code> mode with anti-bot fingerprint masking to reliably render dynamic JavaScript DOM elements.</p>
+                    </div>
+
+                    <div class="spec-card">
+                        <div class="spec-header blue">
+                            <span class="spec-dot blue"></span>
+                            <h4>2. Daily Up-to-Date Scheduler</h4>
+                        </div>
+                        <p>Powered by <code>APScheduler</code> running as a background daemon on <code>02:00 AM</code> daily cron to track rating drifts and maintain up-to-date data.</p>
+                    </div>
+
+                    <div class="spec-card">
+                        <div class="spec-header gold">
+                            <span class="spec-dot gold"></span>
+                            <h4>3. Custom Data Use (CSV / ML / Analytics)</h4>
+                        </div>
+                        <p>Pre-structured <code>UTF-8-SIG</code> CSV ready for ingestion in Pandas, Scikit-learn recommendation engines, Power BI, or Tableau dashboards.</p>
+                    </div>
+
+                    <div class="spec-card">
+                        <div class="spec-header purple">
+                            <span class="spec-dot purple"></span>
+                            <h4>5. Expandable Micro-Scraper</h4>
+                        </div>
+                        <p>On-demand scraping worker targeting individual movie URLs for deep metadata: Director, Top Cast, Sub-Genres, and Storyline Plot.</p>
+                    </div>
+                </div>
+
+                <div class="code-preview-block">
+                    <div class="code-preview-header">
+                        <span>Python Data Science Ingestion Example:</span>
+                    </div>
+                    <pre><code>import pandas as pd
+df = pd.read_csv('data/imdb_top250.csv')
+print(f"Top 5 Directors:\n{df.head()}")
+# Ready for ML Recommendation Models &amp; Time-series Rating Analysis</code></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="toggleTechSpecModal()">Close Specs</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── App Footer ───────────────────────────────────────────────── -->
+    <footer class="app-footer">
+        <div class="footer-container">
+            <span>IMDb Top 250 Rating Monitor &middot; Selenium WebDriver &middot; pandas &middot; Flask &middot; APScheduler</span>
+            <div class="footer-links">
+                <a href="/download/csv" class="footer-link">Download Dataset</a>
+                <a href="https://www.imdb.com/chart/top/" target="_blank" rel="noopener" class="footer-link">IMDb Source &rarr;</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- ── Scripts ──────────────────────────────────────────────────── -->
+    <script>
+        const totalCount = {{ total }};
+        let activeDecadeFilter = null;
+        let activeQuickFilter = 'all';
+        const movieDetailCache = {};
+
+        // ── Live Search & Keyboard Shortcut ─────────────────────────
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const visibleCountEl = document.getElementById('visibleCount');
+        const noResultsBlock = document.getElementById('noResultsBlock');
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === '/' && document.activeElement !== searchInput) {
+                e.preventDefault();
+                searchInput.focus();
+            }
+            if (e.key === 'Escape' && document.activeElement === searchInput) {
+                clearSearch();
+            }
+        });
+
+        searchInput.addEventListener('input', () => {
+            clearSearchBtn.classList.toggle('hidden', searchInput.value.length === 0);
+            applyAllFilters();
+        });
+
+        function clearSearch() {
+            searchInput.value = '';
+            clearSearchBtn.classList.add('hidden');
+            activeDecadeFilter = null;
+            document.querySelectorAll('.decade-pill-item').forEach(p => p.classList.remove('active'));
+            setQuickFilter('all', document.querySelector('.filter-chip'));
+            applyAllFilters();
+        }
+
+        // ── Filter & Sorting Logic ──────────────────────────────────
+        function setQuickFilter(filterType, btnEl) {
+            activeQuickFilter = filterType;
+            document.querySelectorAll('.filter-chip').forEach(b => b.classList.remove('active'));
+            if (btnEl) btnEl.classList.add('active');
+            applyAllFilters();
+        }
+
+        function filterByDecade(decade) {
+            if (activeDecadeFilter === decade) {
+                activeDecadeFilter = null;
+                document.getElementById('decade-pill-' + decade)?.classList.remove('active');
+            } else {
+                document.querySelectorAll('.decade-pill-item').forEach(p => p.classList.remove('active'));
+                activeDecadeFilter = decade;
+                document.getElementById('decade-pill-' + decade)?.classList.add('active');
+            }
+            applyAllFilters();
+        }
+
+        function applyAllFilters() {
+            const query = searchInput.value.toLowerCase().trim();
+            const rows = document.querySelectorAll('.movie-row');
+            let visible = 0;
+
+            rows.forEach(row => {
+                const title = row.getAttribute('data-title').toLowerCase();
+                const rank = parseInt(row.getAttribute('data-rank'), 10);
+                const year = parseInt(row.getAttribute('data-year'), 10);
+                const rating = parseFloat(row.getAttribute('data-rating'));
+                const detailRow = document.getElementById('detail-' + rank);
+
+                let matchesSearch = !query || title.includes(query);
+                
+                let matchesQuick = true;
+                if (activeQuickFilter === 'top10') matchesQuick = rank <= 10;
+                else if (activeQuickFilter === 'top50') matchesQuick = rank <= 50;
+                else if (activeQuickFilter === 'high-rating') matchesQuick = rating >= 8.8;
+                else if (activeQuickFilter === 'classic') matchesQuick = year <= 1980;
+                else if (activeQuickFilter === 'modern') matchesQuick = year >= 2010;
+
+                let matchesDecade = true;
+                if (activeDecadeFilter) {
+                    const dec = parseInt(activeDecadeFilter, 10);
+                    matchesDecade = year >= dec && year < dec + 10;
+                }
+
+                const isVisible = matchesSearch && matchesQuick && matchesDecade;
+                row.style.display = isVisible ? '' : 'none';
+
+                if (detailRow && !isVisible) {
+                    detailRow.classList.add('hidden');
+                    const caret = document.getElementById('caret-' + rank);
+                    if (caret) caret.classList.remove('open');
+                }
+
+                if (isVisible) visible++;
+            });
+
+            if (visibleCountEl) visibleCountEl.textContent = visible;
+            if (noResultsBlock) noResultsBlock.classList.toggle('hidden', visible > 0 || totalCount === 0);
+        }
+
+        function applySorting() {
+            const sortMode = document.getElementById('sortSelect').value;
+            const tbody = document.getElementById('movieTableBody');
+            const rows = Array.from(document.querySelectorAll('.movie-row'));
+
+            rows.sort((a, b) => {
+                const rankA = parseInt(a.getAttribute('data-rank'), 10);
+                const rankB = parseInt(b.getAttribute('data-rank'), 10);
+                const ratingA = parseFloat(a.getAttribute('data-rating')) || 0;
+                const ratingB = parseFloat(b.getAttribute('data-rating')) || 0;
+                const yearA = parseInt(a.getAttribute('data-year'), 10) || 0;
+                const yearB = parseInt(b.getAttribute('data-year'), 10) || 0;
+                const titleA = a.getAttribute('data-title').toLowerCase();
+                const titleB = b.getAttribute('data-title').toLowerCase();
+
+                if (sortMode === 'rank-asc') return rankA - rankB;
+                if (sortMode === 'rank-desc') return rankB - rankA;
+                if (sortMode === 'rating-desc') return ratingB - ratingA || rankA - rankB;
+                if (sortMode === 'rating-asc') return ratingA - ratingB || rankA - rankB;
+                if (sortMode === 'year-desc') return yearB - yearA || rankA - rankB;
+                if (sortMode === 'year-asc') return yearA - yearB || rankA - rankB;
+                if (sortMode === 'title-asc') return titleA.localeCompare(titleB);
+                return 0;
+            });
+
+            rows.forEach(row => {
+                const rank = row.getAttribute('data-rank');
+                const detailRow = document.getElementById('detail-' + rank);
+                tbody.appendChild(row);
+                if (detailRow) tbody.appendChild(detailRow);
+            });
+        }
+
+        // ── Expandable Details Drawer (Feature 5) ───────────────────
+        function handleRowClick(event, rank, imdbUrl) {
+            // Prevent toggling if user selected text or clicked external links
+            if (event.target.tagName === 'A') return;
+            toggleExpand(rank, imdbUrl);
+        }
+
+        function toggleExpand(rank, imdbUrl) {
+            const detailRow = document.getElementById('detail-' + rank);
+            const caret = document.getElementById('caret-' + rank);
+            const contentBox = document.getElementById('detail-content-' + rank);
+
+            if (!detailRow) return;
+
+            const isHidden = detailRow.classList.contains('hidden');
+
+            if (isHidden) {
+                detailRow.classList.remove('hidden');
+                if (caret) caret.classList.add('open');
+
+                if (movieDetailCache[rank]) {
+                    renderDetail(contentBox, movieDetailCache[rank], imdbUrl);
+                    return;
+                }
+
+                if (!imdbUrl) {
+                    contentBox.innerHTML = '<div class="detail-error">IMDb URL link unavailable for this record.</div>';
+                    return;
+                }
+
+                contentBox.innerHTML = `
+                    <div class="detail-loading-state">
+                        <div class="spinner-small"></div>
+                        <span>Extracting live cast, genres, director &amp; plot summary via headless browser...</span>
+                    </div>
+                `;
+
+                fetch('/api/movie-detail?url=' + encodeURIComponent(imdbUrl))
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data.error) {
+                            contentBox.innerHTML = `<div class="detail-error">Error retrieving details: ${data.error}</div>`;
+                        } else {
+                            movieDetailCache[rank] = data;
+                            renderDetail(contentBox, data, imdbUrl);
+                        }
+                    })
+                    .catch(err => {
+                        contentBox.innerHTML = `<div class="detail-error">Connection failure: ${err.message}</div>`;
+                    });
+            } else {
+                detailRow.classList.add('hidden');
+                if (caret) caret.classList.remove('open');
+            }
+        }
+
+        function renderDetail(container, data, imdbUrl) {
+            const genresHtml = (data.genres && data.genres.length > 0)
+                ? data.genres.map(g => `<span class="badge-tag genre">${g}</span>`).join('')
+                : '<span class="text-muted">Not specified</span>';
+
+            const castHtml = (data.cast && data.cast.length > 0)
+                ? data.cast.map(c => `
+                    <span class="badge-tag cast">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        ${c}
+                    </span>
+                  `).join('')
+                : '<span class="text-muted">Not specified</span>';
+
+            container.innerHTML = `
+                <div class="detail-content-layout">
+                    <div class="detail-meta-columns">
+                        <div class="meta-section">
+                            <span class="meta-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>
+                                </svg>
+                                Director
+                            </span>
+                            <span class="meta-value-highlight">${data.director || 'N/A'}</span>
+                        </div>
+
+                        <div class="meta-section">
+                            <span class="meta-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>
+                                </svg>
+                                Genres
+                            </span>
+                            <div class="tag-cloud">${genresHtml}</div>
+                        </div>
+
+                        <div class="meta-section full-col">
+                            <span class="meta-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                                </svg>
+                                Principal Cast
+                            </span>
+                            <div class="tag-cloud">${castHtml}</div>
+                        </div>
+
+                        <div class="meta-section full-col">
+                            <span class="meta-label">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                                </svg>
+                                Synopsis &amp; Plot Summary
+                            </span>
+                            <p class="plot-quote">${data.plot || 'No synopsis available for this title.'}</p>
+                        </div>
+                    </div>
+
+                    <div class="detail-action-bar">
+                        <a href="${imdbUrl}" target="_blank" rel="noopener noreferrer" class="link-external-imdb">
+                            <span>Open on IMDb.com</span>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                        </a>
+                        <span class="micro-feature-badge">Dynamic Single-Page Extractor</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ── Trigger Scrape with Non-Intrusive Toast UI ──────────────
+        function triggerScrape() {
+            const btn = document.getElementById('scrapeBtn');
+            btn.disabled = true;
+            btn.innerHTML = `
+                <div class="spinner-small-btn"></div>
+                <span>Scraping 250 Movies...</span>
+            `;
+
+            showToast('info', 'Headless Chrome scraper launched. Processing JavaScript-rendered DOM (approx 30s)...');
+
+            fetch('/api/scrape', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'started' || data.status === 'running') {
+                        if (data.status === 'running') showToast('info', data.message);
+                        pollScrapeStatus();
+                    } else {
+                        showToast('error', `Extraction failed: ${data.message}`);
+                        resetScrapeBtn();
+                    }
+                })
+                .catch(err => {
+                    showToast('error', `Network error: ${err.message}`);
+                    resetScrapeBtn();
+                });
+        }
+
+        function pollScrapeStatus() {
+            const interval = setInterval(() => {
+                fetch('/api/scrape/status')
+                    .then(res => res.json())
+                    .then(data => {
+                        if (!data.is_running) {
+                            clearInterval(interval);
+                            if (data.error) {
+                                showToast('error', `Extraction failed: ${data.error}`);
+                                resetScrapeBtn();
+                            } else {
+                                showToast('success', `Success! Scraped ${data.last_count} movies. Reloading dashboard...`);
+                                setTimeout(() => location.reload(), 1200);
+                            }
+                        }
+                    })
+                    .catch(err => console.error('Polling error:', err));
+            }, 2500);
+        }
+
+        function resetScrapeBtn() {
+            const btn = document.getElementById('scrapeBtn');
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg class="icon btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+                <span>Scrape Now</span>
+            `;
+        }
+
+        function showToast(type, message) {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast-item toast-${type}`;
+            
+            const iconSvg = type === 'success' 
+                ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`
+                : type === 'error'
+                ? `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`
+                : `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`;
+
+            toast.innerHTML = `
+                <div class="toast-icon">${iconSvg}</div>
+                <div class="toast-msg">${message}</div>
+                <button class="toast-close" onclick="this.parentElement.remove()">&times;</button>
+            `;
+
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 6000);
+        }
+
+        // ── Specs Modal ─────────────────────────────────────────────
+        function toggleTechSpecModal() {
+            const modal = document.getElementById('techModal');
+            modal.classList.toggle('hidden');
+        }
+
+        function handleModalBackdropClick(e) {
+            if (e.target.id === 'techModal') {
+                toggleTechSpecModal();
+            }
+        }
+    </script>
+</body>
+</html>
